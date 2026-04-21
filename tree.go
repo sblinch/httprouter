@@ -10,13 +10,6 @@ import (
 	"unicode/utf8"
 )
 
-func min(a, b int) int {
-	if a <= b {
-		return a
-	}
-	return b
-}
-
 func longestCommonPrefix(a, b string) int {
 	i := 0
 	max := min(len(a), len(b))
@@ -28,7 +21,7 @@ func longestCommonPrefix(a, b string) int {
 
 // Search for a wildcard segment and check the name for invalid characters.
 // Returns -1 as index, if no wildcard was found.
-func findWildcard(path string) (wilcard string, i int, valid bool) {
+func findWildcard(path string) (wildcard string, i int, valid bool) {
 	// Find start
 	for start, c := range []byte(path) {
 		// A wildcard starts with ':' (param) or '*' (catch-all)
@@ -323,7 +316,7 @@ func (n *node) insertChild(path, fullPath string, handle Handle) {
 // If no handle can be found, a TSR (trailing slash redirect) recommendation is
 // made if a handle exists with an extra (without the) trailing slash for the
 // given path.
-func (n *node) getValue(path string, params func() *Params) (handle Handle, ps *Params, tsr bool) {
+func (n *node) getValue(path string, setParam func(name, value string)) (handle Handle, tsr bool) {
 walk: // Outer loop for walking the tree
 	for {
 		prefix := n.path
@@ -361,17 +354,8 @@ walk: // Outer loop for walking the tree
 					}
 
 					// Save param value
-					if params != nil {
-						if ps == nil {
-							ps = params()
-						}
-						// Expand slice within preallocated capacity
-						i := len(*ps)
-						*ps = (*ps)[:i+1]
-						(*ps)[i] = Param{
-							Key:   n.path[1:],
-							Value: path[:end],
-						}
+					if setParam != nil {
+						setParam(n.path[1:], path[:end])
 					}
 
 					// We need to go deeper!
@@ -400,17 +384,8 @@ walk: // Outer loop for walking the tree
 
 				case catchAll:
 					// Save param value
-					if params != nil {
-						if ps == nil {
-							ps = params()
-						}
-						// Expand slice within preallocated capacity
-						i := len(*ps)
-						*ps = (*ps)[:i+1]
-						(*ps)[i] = Param{
-							Key:   n.path[2:],
-							Value: path,
-						}
+					if setParam != nil {
+						setParam(n.path[2:], path)
 					}
 
 					handle = n.handle

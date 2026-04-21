@@ -66,7 +66,7 @@ func main() {
 
 As you can see, `:name` is a *named parameter*. The values are accessible via `httprouter.Params`, which is just a slice of `httprouter.Param`s. You can get the value of a parameter either by its index in the slice, or by using the `ByName(name)` method: `:name` can be retrieved by `ByName("name")`.
 
-When using a `http.Handler` (using `router.Handler` or `http.HandlerFunc`) instead of HttpRouter's handle API using a 3rd function parameter, the named parameters are stored in the `request.Context`. See more below under [Why doesn't this work with http.Handler?](#why-doesnt-this-work-with-httphandler).
+When using a `http.Handler` (using `router.Handler` or `Handle`) instead of HttpRouter's handle API using a 3rd function parameter, the named parameters are stored in the `request.Context`. See more below under [Why doesn't this work with http.Handler?](#why-doesnt-this-work-with-httphandler).
 
 Named parameters only match a single path segment:
 
@@ -132,7 +132,7 @@ For even better scalability, the child nodes on each tree level are ordered by p
 
 ## Why doesn't this work with `http.Handler`?
 
-**It does!** The router itself implements the `http.Handler` interface. Moreover the router provides convenient [adapters for `http.Handler`](https://godoc.org/github.com/julienschmidt/httprouter#Router.Handler)s and [`http.HandlerFunc`](https://godoc.org/github.com/julienschmidt/httprouter#Router.HandlerFunc)s which allows them to be used as a [`httprouter.Handle`](https://godoc.org/github.com/julienschmidt/httprouter#Router.Handle) when registering a route.
+**It does!** The router itself implements the `http.Handler` interface. Moreover the router provides convenient [adapters for `http.Handler`](https://godoc.org/github.com/julienschmidt/httprouter#Router.Handler)s and [`Handle`](https://godoc.org/github.com/julienschmidt/httprouter#Router.HandlerFunc)s which allows them to be used as a [`httprouter.Handle`](https://godoc.org/github.com/julienschmidt/httprouter#Router.Handle) when registering a route.
 
 Named parameters can be accessed `request.Context`:
 
@@ -154,7 +154,7 @@ One might wish to modify automatic responses to OPTIONS requests, e.g. to suppor
 This can be achieved using the [`Router.GlobalOPTIONS`](https://godoc.org/github.com/julienschmidt/httprouter#Router.GlobalOPTIONS) handler:
 
 ```go
-router.GlobalOPTIONS = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+router.GlobalOPTIONS = Handle(func(w http.ResponseWriter, r *http.Request) {
     if r.Header.Get("Access-Control-Request-Method") != "" {
         // Set CORS headers
         header := w.Header()

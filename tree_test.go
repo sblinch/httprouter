@@ -27,7 +27,7 @@ import (
 var fakeHandlerValue string
 
 func fakeHandler(val string) Handle {
-	return func(http.ResponseWriter, *http.Request, Params) {
+	return func(http.ResponseWriter, *http.Request) {
 		fakeHandlerValue = val
 	}
 }
@@ -36,17 +36,19 @@ type testRequests []struct {
 	path       string
 	nilHandler bool
 	route      string
-	ps         Params
-}
-
-func getParams() *Params {
-	ps := make(Params, 0, 20)
-	return &ps
+	pmap       map[string]string
 }
 
 func checkRequests(t *testing.T, tree *node, requests testRequests) {
+
+	pmap := make(map[string]string)
+	setParam := func(name, value string) {
+		pmap[name] = value
+	}
+
 	for _, request := range requests {
-		handler, psp, _ := tree.getValue(request.path, getParams)
+		clear(pmap)
+		handler, _ := tree.getValue(request.path, setParam)
 
 		switch {
 		case handler == nil:
@@ -56,18 +58,13 @@ func checkRequests(t *testing.T, tree *node, requests testRequests) {
 		case request.nilHandler:
 			t.Errorf("handle mismatch for route '%s': Expected nil handle", request.path)
 		default:
-			handler(nil, nil, nil)
+			handler(nil, nil)
 			if fakeHandlerValue != request.route {
 				t.Errorf("handle mismatch for route '%s': Wrong handle (%s != %s)", request.path, fakeHandlerValue, request.route)
 			}
 		}
 
-		var ps Params
-		if psp != nil {
-			ps = *psp
-		}
-
-		if !reflect.DeepEqual(ps, request.ps) {
+		if !reflect.DeepEqual(pmap, request.pmap) {
 			t.Errorf("Params mismatch for route '%s'", request.path)
 		}
 	}
@@ -168,19 +165,19 @@ func TestTreeWildcard(t *testing.T) {
 
 	checkRequests(t, tree, testRequests{
 		{"/", false, "/", nil},
-		{"/cmd/test/", false, "/cmd/:tool/", Params{Param{"tool", "test"}}},
-		{"/cmd/test", true, "", Params{Param{"tool", "test"}}},
-		{"/cmd/test/3", false, "/cmd/:tool/:sub", Params{Param{"tool", "test"}, Param{"sub", "3"}}},
-		{"/src/", false, "/src/*filepath", Params{Param{"filepath", "/"}}},
-		{"/src/some/file.png", false, "/src/*filepath", Params{Param{"filepath", "/some/file.png"}}},
+		{"/cmd/test/", false, "/cmd/:tool/", map[string]string{"tool": "test"}},
+		{"/cmd/test", true, "", map[string]string{"tool": "test"}},
+		{"/cmd/test/3", false, "/cmd/:tool/:sub", map[string]string{"tool": "test", "sub": "3"}},
+		{"/src/", false, "/src/*filepath", map[string]string{"filepath": "/"}},
+		{"/src/some/file.png", false, "/src/*filepath", map[string]string{"filepath": "/some/file.png"}},
 		{"/search/", false, "/search/", nil},
-		{"/search/someth!ng+in+ünìcodé", false, "/search/:query", Params{Param{"query", "someth!ng+in+ünìcodé"}}},
-		{"/search/someth!ng+in+ünìcodé/", true, "", Params{Param{"query", "someth!ng+in+ünìcodé"}}},
-		{"/user_gopher", false, "/user_:name", Params{Param{"name", "gopher"}}},
-		{"/user_gopher/about", false, "/user_:name/about", Params{Param{"name", "gopher"}}},
-		{"/files/js/inc/framework.js", false, "/files/:dir/*filepath", Params{Param{"dir", "js"}, Param{"filepath", "/inc/framework.js"}}},
-		{"/info/gordon/public", false, "/info/:user/public", Params{Param{"user", "gordon"}}},
-		{"/info/gordon/project/go", false, "/info/:user/project/:project", Params{Param{"user", "gordon"}, Param{"project", "go"}}},
+		{"/search/someth!ng+in+ünìcodé", false, "/search/:query", map[string]string{"query": "someth!ng+in+ünìcodé"}},
+		{"/search/someth!ng+in+ünìcodé/", true, "", map[string]string{"query": "someth!ng+in+ünìcodé"}},
+		{"/user_gopher", false, "/user_:name", map[string]string{"name": "gopher"}},
+		{"/user_gopher/about", false, "/user_:name/about", map[string]string{"name": "gopher"}},
+		{"/files/js/inc/framework.js", false, "/files/:dir/*filepath", map[string]string{"dir": "js", "filepath": "/inc/framework.js"}},
+		{"/info/gordon/public", false, "/info/:user/public", map[string]string{"user": "gordon"}},
+		{"/info/gordon/project/go", false, "/info/:user/project/:project", map[string]string{"user": "gordon", "project": "go"}},
 	})
 
 	checkPriorities(t, tree)
@@ -291,9 +288,9 @@ func TestTreeDupliatePath(t *testing.T) {
 	checkRequests(t, tree, testRequests{
 		{"/", false, "/", nil},
 		{"/doc/", false, "/doc/", nil},
-		{"/src/some/file.png", false, "/src/*filepath", Params{Param{"filepath", "/some/file.png"}}},
-		{"/search/someth!ng+in+ünìcodé", false, "/search/:query", Params{Param{"query", "someth!ng+in+ünìcodé"}}},
-		{"/user_gopher", false, "/user_:name", Params{Param{"name", "gopher"}}},
+		{"/src/some/file.png", false, "/src/*filepath", map[string]string{"filepath": "/some/file.png"}},
+		{"/search/someth!ng+in+ünìcodé", false, "/search/:query", map[string]string{"query": "someth!ng+in+ünìcodé"}},
+		{"/user_gopher", false, "/user_:name", map[string]string{"name": "gopher"}},
 	})
 }
 
@@ -424,7 +421,7 @@ func TestTreeTrailingSlashRedirect(t *testing.T) {
 		"/vendor/x",
 	}
 	for _, route := range tsrRoutes {
-		handler, _, tsr := tree.getValue(route, nil)
+		handler, tsr := tree.getValue(route, nil)
 		if handler != nil {
 			t.Fatalf("non-nil handler for TSR route '%s", route)
 		} else if !tsr {
@@ -441,7 +438,7 @@ func TestTreeTrailingSlashRedirect(t *testing.T) {
 		"/api/world/abc",
 	}
 	for _, route := range noTsrRoutes {
-		handler, _, tsr := tree.getValue(route, nil)
+		handler, tsr := tree.getValue(route, nil)
 		if handler != nil {
 			t.Fatalf("non-nil handler for No-TSR route '%s", route)
 		} else if tsr {
@@ -460,7 +457,7 @@ func TestTreeRootTrailingSlashRedirect(t *testing.T) {
 		t.Fatalf("panic inserting test route: %v", recv)
 	}
 
-	handler, _, tsr := tree.getValue("/", nil)
+	handler, tsr := tree.getValue("/", nil)
 	if handler != nil {
 		t.Fatalf("non-nil handler")
 	} else if tsr {
@@ -714,7 +711,7 @@ func TestRedirectTrailingSlash(t *testing.T) {
 		node.addRoute(item.path, fakeHandler("test"))
 	}
 
-	_, _, tsr := node.getValue("/hello/abx/", nil)
+	_, tsr := node.getValue("/hello/abx/", nil)
 	if tsr != true {
 		t.Fatalf("want true, is false")
 	}
